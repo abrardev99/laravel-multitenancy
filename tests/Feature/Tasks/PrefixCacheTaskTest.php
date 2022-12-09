@@ -2,6 +2,7 @@
 
 use Spatie\Multitenancy\Models\Tenant;
 use Spatie\Multitenancy\Tasks\PrefixCacheTask;
+use Spatie\Multitenancy\Tests\TestClasses\CacheService;
 
 beforeEach(function () {
     config()->set('multitenancy.switch_tenant_tasks', [PrefixCacheTask::class]);
@@ -72,4 +73,30 @@ it('will separate the cache for each tenant', function () {
 
     Tenant::forgetCurrent();
     expect(cache())->get('key')->toEqual('cache-landlord');
+});
+
+test('prefix separate cache well enough using CacheManager dependency injection', function () {
+    $this->app->singleton(CacheService::class);
+
+    app()->make(CacheService::class)->handle();
+
+    expect(cache('key'))->toBe('central-value');
+
+    $tenant1 = Tenant::factory()->create();
+    $tenant2 = Tenant::factory()->create();
+    $tenant1->makeCurrent();
+
+    expect(cache('key'))->toBeNull();
+    app()->make(CacheService::class)->handle();
+    expect(cache('key'))->toBe($tenant1->getKey());
+
+    $tenant2->makeCurrent();
+
+    expect(cache('key'))->toBeNull();
+    app()->make(CacheService::class)->handle();
+    expect(cache('key'))->toBe($tenant2->getKey());
+
+    Tenant::forgetCurrent();
+
+    expect(cache('key'))->toBe('central-value');
 });
